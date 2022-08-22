@@ -1,0 +1,1 @@
+"C:\Program Files\Maxon Cinema 4D R26\Cinema 4D.exe" -nogui %*
