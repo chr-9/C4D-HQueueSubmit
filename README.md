@@ -10,4 +10,3 @@ All assets must be in a shared location on the network, such as a NAS.
 For Maxon licensing purposes, the HQueueClient service must run under the administrator user's account.
 
 ## Todo
-Submitting a job with multiple frames (to reduce overhead at C4D startup)
