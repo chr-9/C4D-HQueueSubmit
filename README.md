@@ -1,5 +1,5 @@
 # C4D-HQueueSubmit
-Script to submit jobs from Cinema4D to HQueue.  
+Script to submit render jobs from Cinema4D to HQueue.  
 
 ## Usage
 1. Place hqueue_submit.py under <Maxon Cinema 4D R**\library>.
