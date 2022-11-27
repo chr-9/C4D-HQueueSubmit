@@ -16,22 +16,23 @@ frameFrom = 0;
 frameTo = 0;
 takeName = "";
 priority = 5;
+
+# Local DriveLetter
 fstr = "Z:/";
-rstr = "\\\\192.168.0.111/Production/";
+# NAS IP/Path
+rstr = "\\\\192.168.0.3/Production/";
 
 framesPerJob = 1;
 
-hqueue_server = "192.168.0.110:5000";
+#HQueue Server IP
+hqueue_server = "192.168.0.2:5000";
 hqueue_clientGroup = "C4D_RS";
+
+#HQueue client Local bat
 client_c4dloc = "C:/c4d.bat";
 
 def Execute():
 	global pathProj, jobname, frameFrom, frameTo, takeName, priority, fstr, rstr, hqueue_server, hqueue_clientGroup;
-	# fstr = fstr.replace("/", os.sep).replace("\\", os.sep);
-	# rstr = rstr.replace("/", os.sep).replace("\\", os.sep);
-	
-
-
 	
 	# Create Job
 	rd = doc.GetActiveRenderData();
@@ -48,6 +49,7 @@ def Execute():
 		"children": []
 	}
 	
+	#single frame
 	if(framesPerJob == 1): 
 		for i in range(frameFrom, frameTo+1): 
 			cmd = client_c4dloc;
@@ -74,6 +76,7 @@ def Execute():
 			}
 			job_spec["children"].append(children);
 	
+	#multiple frame
 	if(framesPerJob > 1): 
 		frameTotal = ( (frameTo+1) - frameFrom);
 		job_count = math.floor(frameTotal / framesPerJob) + 1;
@@ -117,7 +120,7 @@ def Execute():
 	try:
 	    hq.ping();
 	except ConnectionRefusedError:
-	    print("HQueueサーバーに接続できません");
+	    print("Unable to connect to HQueue server.");
 	    return;
 	
 	hq.newjob(job_spec);
@@ -220,7 +223,7 @@ class settings(gui.GeDialog):
 class errordialog(gui.GeDialog):
 	def CreateLayout(self):
 		self.SetTitle('HQueue Submit');
-		self.AddStaticText(1026, c4d.BFH_SCALEFIT,300, 10, 'プロジェクトが保存されていません');
+		self.AddStaticText(1026, c4d.BFH_SCALEFIT,300, 10, 'Project is not saved');
 		self.AddButton(20001, c4d.BFH_SCALE, name='OK');
 		return True;
 	
