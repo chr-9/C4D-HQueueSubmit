@@ -1,3 +1,6 @@
+#hqueue_submit v1.1
+#22/11/25 chi
+
 import c4d
 from c4d import gui
 import subprocess
@@ -5,6 +8,7 @@ import os.path
 import json
 import socket
 import xmlrpc.client
+import math
 
 pathProj = "";
 jobname = "";
@@ -12,21 +16,22 @@ frameFrom = 0;
 frameTo = 0;
 takeName = "";
 priority = 5;
-
-# Local DriveLetter
 fstr = "Z:/";
-# NAS IP/Path
-rstr = "\\\\192.168.0.3/Production/";
+rstr = "\\\\192.168.0.111/Production/";
 
-#HQueue Server IP
-hqueue_server = "192.168.0.2:5000";
+framesPerJob = 1;
+
+hqueue_server = "192.168.0.110:5000";
 hqueue_clientGroup = "C4D_RS";
-
-#Local bat
 client_c4dloc = "C:/c4d.bat";
 
 def Execute():
 	global pathProj, jobname, frameFrom, frameTo, takeName, priority, fstr, rstr, hqueue_server, hqueue_clientGroup;
+	# fstr = fstr.replace("/", os.sep).replace("\\", os.sep);
+	# rstr = rstr.replace("/", os.sep).replace("\\", os.sep);
+	
+
+
 	
 	# Create Job
 	rd = doc.GetActiveRenderData();
@@ -43,30 +48,68 @@ def Execute():
 		"children": []
 	}
 	
-	for i in range(frameFrom, frameTo+1): 
-		cmd = client_c4dloc;
-		if(rd[c4d.RDATA_FRAMESTEP]>1):
-			cmd += " -render \"" + pathProj.replace(fstr, rstr) + "\" -frame " + str(i) + " " + str(i) +" " + rd[c4d.RDATA_FRAMESTEP];
-		else:
-			cmd += " -render \"" + pathProj.replace(fstr, rstr) + "\" -frame " + str(i);
-		if(takeName != ""):
-			cmd += " -take \"" + takeName + "\"";
-		
-		children = {
-			"name": "Frame " + str(i),
-			"priority": priority,
-			"command": cmd,
-			"tags": [ "single" ],
-			"conditions": [
-			{ 
-				"type" : "client",
-				"name": "group",
-				"op": "==",
-				"value": hqueue_clientGroup
+	if(framesPerJob == 1): 
+		for i in range(frameFrom, frameTo+1): 
+			cmd = client_c4dloc;
+			if(rd[c4d.RDATA_FRAMESTEP]>1):
+				cmd += " -render \"" + pathProj.replace(fstr, rstr) + "\" -frame " + str(i) + " " + str(i) +" " + rd[c4d.RDATA_FRAMESTEP];
+			else:
+				cmd += " -render \"" + pathProj.replace(fstr, rstr) + "\" -frame " + str(i);
+			if(takeName != ""):
+				cmd += " -take \"" + takeName + "\"";
+			
+			children = {
+				"name": "Frame " + str(i),
+				"priority": priority,
+				"command": cmd,
+				"tags": [ "single" ],
+				"conditions": [
+				{ 
+					"type" : "client",
+					"name": "group",
+					"op": "==",
+					"value": hqueue_clientGroup
+				}
+				]
 			}
-			]
-		}
-		job_spec["children"].append(children);
+			job_spec["children"].append(children);
+	
+	if(framesPerJob > 1): 
+		frameTotal = ( (frameTo+1) - frameFrom);
+		job_count = math.floor(frameTotal / framesPerJob) + 1;
+		if(job_count*framesPerJob == frameTotal): job_count -= 1;
+		
+		tmp_from = frameFrom;
+		
+		for i in range(0, job_count):
+			if(tmp_from <= frameTo):
+				cmd = client_c4dloc;
+				tmp_to = tmp_from + (framesPerJob-1);
+				if(tmp_to > frameTo): tmp_to = frameTo;
+				
+				if(rd[c4d.RDATA_FRAMESTEP]>1):
+					cmd += " -render \"" + pathProj.replace(fstr, rstr) + "\" -frame " + str(tmp_from) + " " + str(tmp_to) + " " + rd[c4d.RDATA_FRAMESTEP];
+				else:
+					cmd += " -render \"" + pathProj.replace(fstr, rstr) + "\" -frame " + str(tmp_from) + " " + str(tmp_to);
+				if(takeName != ""):
+					cmd += " -take \"" + takeName + "\"";
+				
+				children = {
+					"name": "Frame " + str(tmp_from) + "-" + str(tmp_to),
+					"priority": priority,
+					"command": cmd,
+					"tags": [ "single" ],
+					"conditions": [
+					{ 
+						"type" : "client",
+						"name": "group",
+						"op": "==",
+						"value": hqueue_clientGroup
+					}
+					]
+				}
+				job_spec["children"].append(children);
+				tmp_from += framesPerJob;
 	
 	#print(job_spec);
 	
@@ -74,7 +117,7 @@ def Execute():
 	try:
 	    hq.ping();
 	except ConnectionRefusedError:
-	    print("Unable to connect to HQueue server.");
+	    print("HQueueサーバーに接続できません");
 	    return;
 	
 	hq.newjob(job_spec);
@@ -83,7 +126,7 @@ def Execute():
 class settings(gui.GeDialog):
 	res = False;
 	def CreateLayout(self):
-		self.SetTitle("HQueue Submit v1.0");
+		self.SetTitle("HQueue Submit v1.1");
 		
 		self.GroupBegin(10000, c4d.BFH_LEFT, 2);
 		self.AddStaticText(1000, c4d.BFH_LEFT, 0, 0, 'Project path', c4d.BORDER_NONE);
@@ -102,6 +145,12 @@ class settings(gui.GeDialog):
 		self.AddStaticText(2000, c4d.BFH_LEFT, 0, 0, '', c4d.BORDER_NONE);
 		self.AddStaticText(2000, c4d.BFH_LEFT, 0, 0, '', c4d.BORDER_NONE);
 		
+		self.AddStaticText(1020, c4d.BFH_LEFT, 0, 0, 'Frames per job', c4d.BORDER_NONE);
+		self.AddEditNumberArrows(1021, c4d.BFH_LEFT, 200, 0);
+		
+		self.AddStaticText(2000, c4d.BFH_LEFT, 0, 0, '', c4d.BORDER_NONE);
+		self.AddStaticText(2000, c4d.BFH_LEFT, 0, 0, '', c4d.BORDER_NONE);
+		
 		self.AddStaticText(1012, c4d.BFH_LEFT, 0, 0, '[Local]Path Replace(from)', c4d.BORDER_NONE);
 		self.AddEditText(1013, c4d.BFH_LEFT, 500, 0);
 		self.AddStaticText(1014, c4d.BFH_LEFT, 0, 0, '[NAS]Path Replace(to)', c4d.BORDER_NONE);
@@ -116,13 +165,14 @@ class settings(gui.GeDialog):
 		return False;
 	
 	def AskClose(self):
-		global pathProj, jobname, frameFrom, frameTo, takeName, priority, fstr, rstr, hqueue_server, hqueue_clientGroup;
+		global pathProj, jobname, frameFrom, frameTo, takeName, priority, framesPerJob, fstr, rstr, hqueue_server, hqueue_clientGroup;
 		pathProj = self.GetString(1001).replace("/", os.sep).replace("\\", os.sep);
 		jobname = self.GetString(1003);
 		frameFrom = self.GetInt32(1005);
 		frameTo = self.GetInt32(1007);
 		takeName = self.GetString(1009);
 		priority = self.GetInt32(1011);
+		framesPerJob = self.GetInt32(1021);
 		fstr = self.GetString(1013).replace("/", os.sep).replace("\\", os.sep);
 		rstr = self.GetString(1015).replace("/", os.sep).replace("\\", os.sep);
 		hqueue_server = self.GetString(1017);
@@ -136,6 +186,7 @@ class settings(gui.GeDialog):
 			"rstr": rstr,
 			"hqueue_server": hqueue_server,
 			"hqueue_clientGroup": hqueue_clientGroup,
+			"framesPerJob": framesPerJob,
 		}
 		
 		jf = open(os.getenv("HOMEDRIVE") + os.getenv("HOMEPATH") + os.sep + 'c4dhqueue.json', 'w');
@@ -150,6 +201,7 @@ class settings(gui.GeDialog):
 		self.SetLong(1005, frameFrom);
 		self.SetLong(1007, frameTo);
 		self.SetLong(1011, priority);
+		self.SetLong(1021, framesPerJob)
 		self.SetString(1013, fstr.replace("/", os.sep).replace("\\", os.sep));
 		self.SetString(1015, rstr.replace("/", os.sep).replace("\\", os.sep));
 		
@@ -168,7 +220,7 @@ class settings(gui.GeDialog):
 class errordialog(gui.GeDialog):
 	def CreateLayout(self):
 		self.SetTitle('HQueue Submit');
-		self.AddStaticText(1026, c4d.BFH_SCALEFIT,300, 10, 'Project is not saved');
+		self.AddStaticText(1026, c4d.BFH_SCALEFIT,300, 10, 'プロジェクトが保存されていません');
 		self.AddButton(20001, c4d.BFH_SCALE, name='OK');
 		return True;
 	
@@ -178,7 +230,7 @@ class errordialog(gui.GeDialog):
 		return True;
 	
 def main():
-	global pathProj, jobname, frameFrom, frameTo, takeName, priority, fstr, rstr, hqueue_server, hqueue_clientGroup;
+	global pathProj, jobname, frameFrom, frameTo, takeName, priority, framesPerJob, fstr, rstr, hqueue_server, hqueue_clientGroup;
 	pathProj = doc.GetDocumentPath()+'/'+doc.GetDocumentName();
 	if doc.GetDocumentPath()=='':
 		dlg = errordialog();
@@ -194,6 +246,10 @@ def main():
 		rstr = s["rstr"];
 		hqueue_server = s["hqueue_server"];
 		hqueue_clientGroup = s["hqueue_clientGroup"];
+		try:
+			framesPerJob = int(s.get("framesPerJob"));
+		except:
+			framesPerJob = 1;
 	
 	pathProj = pathProj.replace("/", os.sep).replace("\\", os.sep);
 	
